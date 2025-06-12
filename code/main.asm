@@ -40,6 +40,126 @@ RBackBufferHeight dword ?
 RBackBufferBPP dword ?
 
 .code
+    ; rcx - mem
+    ; rdx - size
+ClearMemory proc
+    xor r8, r8
+    jmp loop_clear_test
+loop_clear:
+    mov byte ptr [rcx], 0
+    inc r8
+    inc rcx
+loop_clear_test:
+    cmp r8, rdx
+    jnae loop_clear
+    ret
+ClearMemory endp
+
+; all signed, but colouru32 is unsigned
+; ecx - x
+; edx - y
+; r8d - w
+; r9d - h
+; colouru32
+; This can be improved; very possible to use fewer registers
+FillRectangle proc
+    sub rsp, 40
+
+    mov eax, dword ptr [RBackBufferWidth]
+    dec eax
+    mov dword ptr [rsp + 0], eax
+
+    mov eax, dword ptr [RBackBufferHeight]
+    dec eax
+    mov dword ptr [rsp + 4], eax
+
+    add r8d, ecx ; EndX
+    add r9d, edx ; EndY
+
+    xor rax, rax
+    ; if StartX < 0, StartX = 0
+    cmp ecx, 0
+    cmovl ecx, eax
+    ; if StartX > OneMinusMaxWidth, StartX = OneMinusMaxWidth
+    cmp ecx, dword ptr [rsp + 0]
+    cmovnle ecx, dword ptr [rsp + 0]
+
+    ; if StartY < 0, StartY = 0
+    cmp edx, 0
+    cmovl edx, eax
+    ; if StartY > OneMinusMaxHeight, StartY = OneMinusMaxHeight
+    cmp edx, dword ptr [rsp + 4]
+    cmovnle edx, dword ptr [rsp + 4]
+
+    ; if EndX < 0, EndX = 0
+    cmp r8d, 0
+    cmovl r8d, r8d
+    ; if EndX > OneMinusMaxWidth, EndX = OneMinusMaxWidth
+    cmp r8d, dword ptr [rsp + 0]
+    cmovnle r8d, dword ptr [rsp + 0]
+
+    ; if EndY < 0, EndY = 0
+    cmp r9d, 0
+    cmovl r9d, eax
+    ; if EndY > OneMinusMaxHeight, EndY = OneMinusMaxHeight
+    cmp r9d, dword ptr [rsp + 4]
+    cmovnle r9d, dword ptr [rsp + 4]
+
+    ; Double Loop Counts
+    sub r8d, ecx
+    sub r9d, edx
+
+    mov dword ptr [rsp + 8], r8d
+
+    mov eax, [rsp + 80]
+    mov byte ptr [rsp + 12], al
+    shr eax, 8
+    mov byte ptr [rsp + 13], al
+    shr eax, 8
+    mov byte ptr [rsp + 14], al
+    shr eax, 8
+    mov byte ptr [rsp + 15], al
+
+    mov eax, dword ptr [RBackBufferWidth]
+    mul edx
+    add eax, ecx
+    mul dword ptr [RBackBufferBPP]
+    mov rcx, RPixels
+    add rcx, rax
+
+    mov eax, dword ptr [RBackBufferWidth]
+    mul dword ptr [RBackBufferBPP]
+    mov rdx, rax
+
+    jmp draw_rect_loop_y_test
+draw_rect_loop_y:
+    mov rax, rcx
+    dec r9d
+    jmp draw_rect_loop_x_test
+draw_rect_loop_x:
+    mov r10b, byte ptr [rsp + 12]
+    mov byte ptr [rax + 3], r10b
+    mov r10b, byte ptr [rsp + 13]
+    mov byte ptr [rax + 2], r10b
+    mov r10b, byte ptr [rsp + 14]
+    mov byte ptr [rax + 1], r10b
+    mov r10b, byte ptr [rsp + 15]
+    mov byte ptr [rax + 0], r10b
+    add rax, 4
+    dec r8d
+draw_rect_loop_x_test:
+    cmp r8d, 0
+    jg draw_rect_loop_x
+    mov r8d, dword ptr [rsp + 8]
+    add rcx, rdx
+draw_rect_loop_y_test:
+    cmp r9d, 0
+    jg draw_rect_loop_y
+
+    add rsp, 40
+    ret
+FillRectangle endp
+
 WinMainCRTStartup proc
     ; WNDCLASS Struct: 72 bytes
     ; 4 more Local Vars: 32 bytes
@@ -185,35 +305,12 @@ EntryApp_PeekMessage:
     
 EntryApp_DoWork:
     ; Game Update And Render Work
-    mov ecx, 0
-    mov edx, 0
-    mov r8, RPixels
-    mov r9d, dword ptr [RBackBufferWidth]
-    ; is this necessary?
-    xor rax, rax
-    mov eax, dword ptr [RBackBufferBPP]
-    mul r9d
-    mov r10, rax
-loop_y:
-    mov r9, r8
-loop_x:
-    mov byte ptr [r9 + 0], cl
-    mov byte ptr [r9 + 1], dl
-    mov byte ptr [r9 + 2], 0
-    mov byte ptr [r9 + 3], 0ffh
-    mov eax, dword ptr [RBackBufferBPP]
-    add r9, rax
-loop_x_test:
-    inc edx
-    cmp edx, dword ptr [RBackBufferWidth] 
-    jnae loop_x
-
-    add r8, r10
-    xor edx, edx
-loop_y_test:
-    inc ecx
-    cmp ecx, dword ptr [RBackBufferHeight]
-    jnae loop_y
+    mov ecx, 32
+    mov edx, 32
+    mov r8d, 80
+    mov r9d, 80
+    mov dword ptr [rsp + 32], 0ff00ffffh
+    call FillRectangle
     
     ; update screen and clear
     mov rcx, WindowHandle
@@ -255,6 +352,13 @@ loop_y_test:
     mov dword ptr [rsp + 88], 0
     mov dword ptr [rsp + 96], 00CC0020h
     call StretchDIBits
+
+    mov rcx, RPixels
+    mov eax, dword ptr [RBackBufferWidth]
+    mul dword ptr [RBackBufferHeight]
+    mul dword ptr [RBackBufferBPP]
+    mov rdx, rax
+    call ClearMemory
 
     ; Cap FPS
     lea rcx, [rsp + 120]
