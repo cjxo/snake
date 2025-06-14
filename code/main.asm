@@ -38,6 +38,7 @@ RPixels qword ?
 RBackBufferWidth dword ?
 RBackBufferHeight dword ?
 RBackBufferBPP dword ?
+GGridData dword 256 dup(?)
 
 .code
     ; rcx - mem
@@ -65,11 +66,11 @@ FillRectangle proc
     sub rsp, 40
 
     mov eax, dword ptr [RBackBufferWidth]
-    dec eax
+    ;dec eax
     mov dword ptr [rsp + 0], eax
 
     mov eax, dword ptr [RBackBufferHeight]
-    dec eax
+    ;dec eax
     mov dword ptr [rsp + 4], eax
 
     add r8d, ecx ; EndX
@@ -107,6 +108,11 @@ FillRectangle proc
     ; Double Loop Counts
     sub r8d, ecx
     sub r9d, edx
+
+	cmp r8d, 0
+	jle done
+	cmp r9d, 0
+	jle done
 
     mov dword ptr [rsp + 8], r8d
 
@@ -155,6 +161,7 @@ draw_rect_loop_y_test:
     cmp r9d, 0
     jg draw_rect_loop_y
 
+done:
     add rsp, 40
     ret
 FillRectangle endp
@@ -170,11 +177,11 @@ WireRectangle proc
     sub rsp, 40
 
     mov eax, dword ptr [RBackBufferWidth]
-    dec eax
+;    dec eax
     mov dword ptr [rsp + 0], eax
 
     mov eax, dword ptr [RBackBufferHeight]
-    dec eax
+;    dec eax
     mov dword ptr [rsp + 4], eax
 
     add r8d, ecx ; EndX
@@ -212,6 +219,11 @@ WireRectangle proc
     ; Double Loop Counts
     sub r8d, ecx
     sub r9d, edx
+
+	cmp r8d, 0
+	jle done
+	cmp r9d, 0
+	jle done
 
     mov dword ptr [rsp + 8], r8d
     mov dword ptr [rsp + 16], r9d
@@ -275,6 +287,7 @@ loop_vert_left_test:
 
     mov r8, qword ptr [rsp + 28]
     mov eax, dword ptr [rsp + 8]
+    dec eax
     mul dword ptr [RBackBufferBPP]
     add rax, r8
 
@@ -320,9 +333,40 @@ loop_hori_lower_test:
     cmp r8d, 0
     jg loop_hori_lower
 
+done:
     add rsp, 40
     ret
 WireRectangle endp
+
+; rcx - x,
+; rdx - y,
+; r8d - colourU32
+DrawSquare proc
+    sub rsp, 56
+    
+    mov dword ptr [rsp + 40], ecx
+    mov dword ptr [rsp + 44], edx
+    mov dword ptr [rsp + 48], r8d
+
+    mov r8d, 40
+    mov r9d, 40
+    mov eax, dword ptr [rsp + 48]
+    mov dword ptr [rsp + 32], eax
+    call WireRectangle
+   
+    mov eax, dword ptr [rsp + 48]
+    mov ecx, dword ptr [rsp + 40]
+    mov edx, dword ptr [rsp + 44]
+	add ecx, 4
+	add edx, 4
+    mov r8d, 32
+    mov r9d, 32
+    mov dword ptr [rsp + 32], eax
+    call FillRectangle
+
+    add rsp, 56
+    ret
+DrawSquare endp
 
 WinMainCRTStartup proc
     ; WNDCLASS Struct: 72 bytes
@@ -469,20 +513,43 @@ EntryApp_PeekMessage:
     
 EntryApp_DoWork:
     ; Game Update And Render Work
-    mov ecx, 32
-    mov edx, 32
-    mov r8d, 80
-    mov r9d, 80
-    mov dword ptr [rsp + 32], 0ff00ffffh
-    call WireRectangle
+    ; Draw Grid
 
-    mov ecx, 130
-    mov edx, 32
-    mov r8d, 80
-    mov r9d, 80
-    mov dword ptr [rsp + 32], 0ff00ffffh
-    call FillRectangle
-    
+    mov dword ptr [rsp + 128], 0
+    jmp draw_grid_y_test
+draw_grid_y:
+    mov dword ptr [rsp + 132], 0
+	jmp draw_grid_x_test
+draw_grid_x:
+    mov eax, dword ptr [rsp + 132]
+    mov ecx, 40
+    mul ecx
+    mov ecx, eax
+    mov eax, 4
+    mul dword ptr [rsp + 132]
+    add ecx, eax
+
+    mov eax, dword ptr [rsp + 128]
+    mov r9d, 40
+    mul r9d
+    mov r9d, eax
+    mov eax, 4
+    mul dword ptr [rsp + 128]
+    add r9d, eax
+    mov edx, r9d
+
+    mov r8d, 0324032ffh
+    call DrawSquare
+
+    inc dword ptr [rsp + 132]
+draw_grid_x_test:
+    cmp dword ptr [rsp + 132], 16
+    jl draw_grid_x
+    inc dword ptr [rsp + 128]
+draw_grid_y_test:
+    cmp dword ptr [rsp + 128], 16
+    jl draw_grid_y
+
     ; update screen and clear
     mov rcx, WindowHandle
     call GetDC
