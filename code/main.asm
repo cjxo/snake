@@ -61,7 +61,6 @@ ClearMemory endp
 ; r8d - w
 ; r9d - h
 ; colouru32
-; This can be improved; very possible to use fewer registers
 FillRectangle proc
     sub rsp, 40
 
@@ -159,6 +158,171 @@ draw_rect_loop_y_test:
     add rsp, 40
     ret
 FillRectangle endp
+
+; all signed, but colouru32 is unsigned
+; ecx - x
+; edx - y
+; r8d - w
+; r9d - h
+; colouru32
+; Very sure this can be improved immensely, this function looks so bad. Embarrassing
+WireRectangle proc
+    sub rsp, 40
+
+    mov eax, dword ptr [RBackBufferWidth]
+    dec eax
+    mov dword ptr [rsp + 0], eax
+
+    mov eax, dword ptr [RBackBufferHeight]
+    dec eax
+    mov dword ptr [rsp + 4], eax
+
+    add r8d, ecx ; EndX
+    add r9d, edx ; EndY
+
+    xor rax, rax
+    ; if StartX < 0, StartX = 0
+    cmp ecx, 0
+    cmovl ecx, eax
+    ; if StartX > OneMinusMaxWidth, StartX = OneMinusMaxWidth
+    cmp ecx, dword ptr [rsp + 0]
+    cmovnle ecx, dword ptr [rsp + 0]
+
+    ; if StartY < 0, StartY = 0
+    cmp edx, 0
+    cmovl edx, eax
+    ; if StartY > OneMinusMaxHeight, StartY = OneMinusMaxHeight
+    cmp edx, dword ptr [rsp + 4]
+    cmovnle edx, dword ptr [rsp + 4]
+
+    ; if EndX < 0, EndX = 0
+    cmp r8d, 0
+    cmovl r8d, r8d
+    ; if EndX > OneMinusMaxWidth, EndX = OneMinusMaxWidth
+    cmp r8d, dword ptr [rsp + 0]
+    cmovnle r8d, dword ptr [rsp + 0]
+
+    ; if EndY < 0, EndY = 0
+    cmp r9d, 0
+    cmovl r9d, eax
+    ; if EndY > OneMinusMaxHeight, EndY = OneMinusMaxHeight
+    cmp r9d, dword ptr [rsp + 4]
+    cmovnle r9d, dword ptr [rsp + 4]
+
+    ; Double Loop Counts
+    sub r8d, ecx
+    sub r9d, edx
+
+    mov dword ptr [rsp + 8], r8d
+    mov dword ptr [rsp + 16], r9d
+    mov dword ptr [rsp + 20], ecx
+    mov dword ptr [rsp + 24], edx
+
+    mov eax, dword ptr [RBackBufferWidth]
+    mul dword ptr [rsp + 24]
+    add eax, dword ptr [rsp + 20]
+    mul dword ptr [RBackBufferBPP]
+    add rax, RPixels
+    mov qword ptr [rsp + 28], rax
+
+    mov eax, [rsp + 80]
+    mov byte ptr [rsp + 12], al
+    shr eax, 8
+    mov byte ptr [rsp + 13], al
+    shr eax, 8
+    mov byte ptr [rsp + 14], al
+    shr eax, 8
+    mov byte ptr [rsp + 15], al
+
+    mov eax, dword ptr [RBackBufferWidth]
+    mul dword ptr [RBackBufferBPP] 
+    mov r9, rax
+
+    mov rax, qword ptr [rsp + 28]
+    jmp loop_hori_upper_test
+loop_hori_upper:
+    mov r10b, byte ptr [rsp + 12]
+    mov byte ptr [rax + 3], r10b
+    mov r10b, byte ptr [rsp + 13]
+    mov byte ptr [rax + 2], r10b
+    mov r10b, byte ptr [rsp + 14]
+    mov byte ptr [rax + 1], r10b
+    mov r10b, byte ptr [rsp + 15]
+    mov byte ptr [rax + 0], r10b
+    add rax, 4
+    dec r8d
+loop_hori_upper_test:
+    cmp r8d, 0
+    jg loop_hori_upper
+
+    mov rax, qword ptr [rsp + 28]
+    mov r8d, dword ptr [rsp + 16]
+    jmp loop_vert_left_test
+loop_vert_left:
+    mov r10b, byte ptr [rsp + 12]
+    mov byte ptr [rax + 3], r10b
+    mov r10b, byte ptr [rsp + 13]
+    mov byte ptr [rax + 2], r10b
+    mov r10b, byte ptr [rsp + 14]
+    mov byte ptr [rax + 1], r10b
+    mov r10b, byte ptr [rsp + 15]
+    mov byte ptr [rax + 0], r10b
+    add rax, r9
+    dec r8d
+loop_vert_left_test:
+    cmp r8d, 0
+    jg loop_vert_left
+
+    mov r8, qword ptr [rsp + 28]
+    mov eax, dword ptr [rsp + 8]
+    mul dword ptr [RBackBufferBPP]
+    add rax, r8
+
+    mov r8d, dword ptr [rsp + 16]
+    jmp loop_vert_right_test
+loop_vert_right:
+    mov r10b, byte ptr [rsp + 12]
+    mov byte ptr [rax + 3], r10b
+    mov r10b, byte ptr [rsp + 13]
+    mov byte ptr [rax + 2], r10b
+    mov r10b, byte ptr [rsp + 14]
+    mov byte ptr [rax + 1], r10b
+    mov r10b, byte ptr [rsp + 15]
+    mov byte ptr [rax + 0], r10b
+    add rax, r9
+    dec r8d
+loop_vert_right_test:
+    cmp r8d, 0
+    jg loop_vert_right
+
+    mov eax, dword ptr [rsp + 16]
+    dec eax
+    mul r9d
+    mov r9, rax
+
+    mov rax, qword ptr [rsp + 28]
+    add rax, r9
+
+    mov r8d, dword ptr [rsp + 8]
+    jmp loop_hori_lower_test
+loop_hori_lower:
+    mov r10b, byte ptr [rsp + 12]
+    mov byte ptr [rax + 3], r10b
+    mov r10b, byte ptr [rsp + 13]
+    mov byte ptr [rax + 2], r10b
+    mov r10b, byte ptr [rsp + 14]
+    mov byte ptr [rax + 1], r10b
+    mov r10b, byte ptr [rsp + 15]
+    mov byte ptr [rax + 0], r10b
+    add rax, 4
+    dec r8d
+loop_hori_lower_test:
+    cmp r8d, 0
+    jg loop_hori_lower
+
+    add rsp, 40
+    ret
+WireRectangle endp
 
 WinMainCRTStartup proc
     ; WNDCLASS Struct: 72 bytes
@@ -306,6 +470,13 @@ EntryApp_PeekMessage:
 EntryApp_DoWork:
     ; Game Update And Render Work
     mov ecx, 32
+    mov edx, 32
+    mov r8d, 80
+    mov r9d, 80
+    mov dword ptr [rsp + 32], 0ff00ffffh
+    call WireRectangle
+
+    mov ecx, 130
     mov edx, 32
     mov r8d, 80
     mov r9d, 80
