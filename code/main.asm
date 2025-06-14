@@ -29,6 +29,7 @@ w32_class_name byte "snake_asm_window_class", 0
 w32_window_name byte "snake", 0
 w32_window_width dword 1280
 w32_window_height dword 720
+GBlockColours dword 0324032ffh, 092aa74ffh, 08080cfffh
 
 .data?
 WindowHandle qword ?
@@ -493,6 +494,9 @@ WinMainCRTStartup proc
     lea rcx, [rsp + 112]
     call QueryPerformanceCounter
 
+    mov dword ptr [GGridData + 4], 1
+    mov dword ptr [GGridData + 8], 2
+
 EntryApp_Loop:
     ; Collect Some User Input
 EntryApp_PeekMessage:
@@ -519,8 +523,24 @@ EntryApp_DoWork:
     jmp draw_grid_y_test
 draw_grid_y:
     mov dword ptr [rsp + 132], 0
-	jmp draw_grid_x_test
+    jmp draw_grid_x_test
 draw_grid_x:
+    mov eax, 16
+    mov r9d, dword ptr [rsp + 128]
+    mul r9d
+    add eax, dword ptr [rsp + 132]
+    mov r9d, 4
+    mul r9d
+    lea r9, GGridData
+    add rax, r9
+
+    xor r8, r8
+    mov r8d, dword ptr [rax]
+    shl r8d, 2
+    lea r9, GBlockColours
+    add r9, r8
+    mov r8d, dword ptr [r9]
+    
     mov eax, dword ptr [rsp + 132]
     mov ecx, 40
     mul ecx
@@ -538,7 +558,6 @@ draw_grid_x:
     add r9d, eax
     mov edx, r9d
 
-    mov r8d, 0324032ffh
     call DrawSquare
 
     inc dword ptr [rsp + 132]
